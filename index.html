@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee Run Room</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Load icon library (for copy icon) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Use Inter as the default font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for a warmer feel */
+        .bg-coffee-main {
+            background-color: #f7f3f0; /* Light cream */
+        }
+        .btn-primary {
+            @apply bg-amber-800 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-amber-900 transition-all duration-300 transform hover:scale-105;
+        }
+        .btn-secondary {
+            @apply bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-gray-700 transition-all duration-200;
+        }
+        .input-field {
+            @apply w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-amber-700 focus:border-transparent outline-none transition-all;
+        }
+        .order-card {
+            @apply bg-white p-6 rounded-xl shadow-lg border border-gray-100;
+        }
+        .card-name {
+            @apply font-bold text-2xl text-amber-900;
+        }
+        .card-order {
+            @apply text-gray-700 text-lg mt-2;
+        }
+        /* Hide views by default */
+        #view-host-initial,
+        #view-guest-form,
+        #view-order-list-container,
+        #loading-view,
+        #success-message {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-coffee-main min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Application Container -->
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-2xl p-6 md:p-10">
+
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-amber-900">Coffee Run</h1>
+            <p class="text-lg text-gray-600 mt-2">Get everyone's order in one place.</p>
+        </div>
+
+        <!-- Loading View -->
+        <div id="loading-view" class="text-center py-12">
+            <p class="text-lg text-gray-500">Connecting to the room...</p>
+        </div>
+
+        <!-- View 1: Host Initial - Start a New Order -->
+        <div id="view-host-initial" class="text-center py-8">
+            <button id="start-order-btn" class="btn-primary text-xl py-4 px-10">
+                <i class="fas fa-coffee mr-2"></i>
+                Start a New Coffee Run
+            </button>
+        </div>
+
+        <!-- View 2: Guest Form - Submit an Order -->
+        <div id="view-guest-form" class="space-y-6">
+            <div>
+                <label for="user-name" class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+                <input type="text" id="user-name" class="input-field" placeholder="e.g., Jane Doe">
+            </div>
+            <div>
+                <label for="user-order" class="block text-sm font-medium text-gray-700 mb-1">Your Order</label>
+                <textarea id="user-order" rows="4" class="input-field" placeholder="e.g., Large iced latte with oat milk"></textarea>
+            </div>
+            <button id="submit-order-btn" class="btn-primary w-full">
+                Submit My Order
+            </button>
+        </div>
+
+        <!-- Success Message after submit -->
+        <div id="success-message" class="text-center py-10">
+            <div class="text-6xl text-green-500 mb-4">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h2 class="text-2xl font-semibold text-gray-800">Order Submitted!</h2>
+            <p class="text-gray-600">Thanks! You can now close this window.</p>
+        </div>
+
+        <!-- View 3: Order List (Shared view for Host & Guests) -->
+        <div id="view-order-list-container" class="space-y-6">
+            <!-- Share Link Section -->
+            <div class="bg-gray-100 p-4 rounded-lg border border-gray-200">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Share this link with your team:</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="share-link-input" class="w-full p-2 rounded-md border border-gray-300 bg-gray-50" readonly>
+                    <button id="copy-link-btn" class="btn-secondary whitespace-nowrap">
+                        <i class="fas fa-copy"></i>
+                        <span id="copy-btn-text">Copy</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Order List Header -->
+            <div>
+                <h3 class="text-2xl font-semibold text-amber-900 border-b-2 border-amber-800/20 pb-2">
+                    Current Orders
+                    <span id="order-count" class="text-lg bg-amber-800 text-white rounded-full px-3 py-1 ml-2">0</span>
+                </h3>
+            </div>
+            
+            <!-- The actual list of orders -->
+            <div id="order-list" class="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                <!-- Orders will be dynamically injected here -->
+                <!-- Example of a placeholder -->
+                <div id="no-orders-message" class="text-center py-8 text-gray-500">
+                    <i class="fas fa-mug-hot text-3xl mb-3"></i>
+                    <p>No orders yet. Waiting for the first one...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Temporary textarea for copy-to-clipboard -->
+    <textarea id="temp-clipboard" style="position: absolute; left: -9999px;"></textarea>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            addDoc, 
+            collection, 
+            onSnapshot, 
+            query,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Global Variables ---
+        let db, auth, app, userId, isAuthReady = false;
+        let currentRoomId = null;
+        let unsubscribeFromOrders = null; // To store the onSnapshot listener
+
+        // Get App ID from environment or use a default
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-coffee-app';
+        
+        // --- DOM Elements ---
+        const loadingView = document.getElementById('loading-view');
+        const hostView = document.getElementById('view-host-initial');
+        const guestView = document.getElementById('view-guest-form');
+        const successView = document.getElementById('success-message');
+        const listContainerView = document.getElementById('view-order-list-container');
+        const orderListEl = document.getElementById('order-list');
+        const noOrdersMessage = document.getElementById('no-orders-message');
+        const orderCountEl = document.getElementById('order-count');
+        
+        const startOrderBtn = document.getElementById('start-order-btn');
+        const submitOrderBtn = document.getElementById('submit-order-btn');
+        const shareLinkInput = document.getElementById('share-link-input');
+        const copyLinkBtn = document.getElementById('copy-link-btn');
+        const copyBtnText = document.getElementById('copy-btn-text');
+
+        const userNameInput = document.getElementById('user-name');
+        const userOrderInput = document.getElementById('user-order');
+
+        // --- Firebase Initialization ---
+        async function initializeFirebase() {
+            try {
+                // Parse Firebase config from environment
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Enable debug logging
+                setLogLevel('Debug');
+                
+                // Set up auth listener
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("User is authenticated:", userId);
+                        isAuthReady = true;
+                        // Now that auth is ready, initialize the main app logic
+                        initializeAppLogic();
+                    } else {
+                        // No user, attempt to sign in
+                        await attemptSignIn();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase initialization error:", error);
+                loadingView.innerHTML = "Error connecting. Please refresh.";
+            }
+        }
+
+        async function attemptSignIn() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    console.log("Signing in with custom token...");
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    console.log("Signing in anonymously...");
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication error:", error);
+                loadingView.innerHTML = "Authentication failed. Please refresh.";
+            }
+        }
+        
+        // --- Main Application Logic ---
+        function initializeAppLogic() {
+            if (!isAuthReady) {
+                console.log("Waiting for auth to be ready...");
+                return;
+            }
+
+            // Check URL for a room ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomIdFromUrl = urlParams.get('room');
+
+            if (roomIdFromUrl) {
+                // This is a GUEST or a HOST returning to their room
+                currentRoomId = roomIdFromUrl;
+                console.log(`Joined room: ${currentRoomId}`);
+                
+                // Update the share link input
+                shareLinkInput.value = window.location.href;
+                
+                // Show the guest form AND the order list
+                showView('guest-form');
+                showView('list-container');
+                
+                // Listen for orders
+                listenToOrders(currentRoomId);
+                
+            } else {
+                // This is a new HOST
+                console.log("No room ID found. Showing host view.");
+                showView('host-initial');
+            }
+        }
+
+        // --- View Management ---
+        function showView(viewName) {
+            // Hide all main views first
+            loadingView.style.display = 'none';
+            hostView.style.display = 'none';
+            guestView.style.display = 'none';
+            listContainerView.style.display = 'none';
+            successView.style.display = 'none';
+            
+            // Show the requested view
+            switch(viewName) {
+                case 'loading':
+                    loadingView.style.display = 'block';
+                    break;
+                case 'host-initial':
+                    hostView.style.display = 'block';
+                    break;
+                case 'guest-form':
+                    guestView.style.display = 'block';
+                    break;
+                case 'list-container':
+                    listContainerView.style.display = 'block';
+                    break;
+                case 'success':
+                    successView.style.display = 'block';
+                    break;
+            }
+        }
+
+        // --- Event Handlers ---
+
+        // HOST: Start a new order
+        startOrderBtn.addEventListener('click', () => {
+            // Generate a new room ID
+            const newRoomId = crypto.randomUUID().substring(0, 8);
+            currentRoomId = newRoomId;
+            
+            // Update the URL in the browser
+            const newUrl = `${window.location.pathname}?room=${newRoomId}`;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+            
+            // Update the share link input
+            shareLinkInput.value = window.location.href;
+            
+            // Hide host view, show list container (which has the link)
+            showView('list-container');
+            // Also show the guest form so the host can add their own order
+            showView('guest-form');
+            
+            // Start listening to this new room
+            listenToOrders(currentRoomId);
+        });
+
+        // GUEST: Submit a new order
+        submitOrderBtn.addEventListener('click', async () => {
+            const name = userNameInput.value.trim();
+            const order = userOrderInput.value.trim();
+
+            if (!name || !order) {
+                // Simple validation, no alert()
+                if (!name) userNameInput.classList.add('border-red-500');
+                if (!order) userOrderInput.classList.add('border-red-500');
+                return;
+            }
+            
+            // Remove error states
+            userNameInput.classList.remove('border-red-500');
+            userOrderInput.classList.remove('border-red-500');
+
+            // Disable button
+            submitOrderBtn.disabled = true;
+            submitOrderBtn.innerHTML = "Submitting...";
+
+            try {
+                const roomCollectionPath = `/artifacts/${appId}/public/data/coffee-rooms/${currentRoomId}/orders`;
+                await addDoc(collection(db, roomCollectionPath), {
+                    name: name,
+                    order: order,
+                    timestamp: new Date()
+                });
+                
+                // Show success message
+                showView('success');
+                // Keep the list container visible
+                showView('list-container');
+
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                submitOrderBtn.disabled = false;
+                submitOrderBtn.innerHTML = "Submit My Order";
+                // TODO: Show a non-alert error message
+            }
+        });
+        
+        // ALL: Copy share link
+        copyLinkBtn.addEventListener('click', () => {
+            const link = shareLinkInput.value;
+            const tempText = document.getElementById('temp-clipboard');
+            tempText.value = link;
+            tempText.select();
+            
+            try {
+                // Use execCommand for iframe compatibility
+                document.execCommand('copy');
+                copyBtnText.textContent = 'Copied!';
+                copyLinkBtn.classList.add('bg-green-600');
+                
+                setTimeout(() => {
+                    copyBtnText.textContent = 'Copy';
+                    copyLinkBtn.classList.remove('bg-green-600');
+                }, 2000);
+
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                copyBtnText.textContent = 'Failed!';
+            }
+        });
+
+        // --- Firestore Real-time Listener ---
+        function listenToOrders(roomId) {
+            if (!isAuthReady || !db) {
+                console.error("Firestore is not ready, cannot listen to orders.");
+                return;
+            }
+
+            // Unsubscribe from any previous listener
+            if (unsubscribeFromOrders) {
+                unsubscribeFromOrders();
+            }
+
+            const roomCollectionPath = `/artifacts/${appId}/public/data/coffee-rooms/${roomId}/orders`;
+            const q = query(collection(db, roomCollectionPath));
+
+            unsubscribeFromOrders = onSnapshot(q, (snapshot) => {
+                console.log("Received order snapshot");
+                // Clear the current list
+                orderListEl.innerHTML = '';
+                
+                const docs = snapshot.docs;
+                
+                // Update order count
+                orderCountEl.textContent = docs.length;
+
+                if (docs.length === 0) {
+                    // Show the 'no orders' message
+                    orderListEl.appendChild(noOrdersMessage);
+                } else {
+                    // Sort docs by timestamp (client-side)
+                    docs.sort((a, b) => a.data().timestamp.toMillis() - b.data().timestamp.toMillis());
+                    
+                    // Render each order
+                    docs.forEach((doc) => {
+                        const order = doc.data();
+                        const orderCard = createOrderCard(order.name, order.order);
+                        orderListEl.appendChild(orderCard);
+                    });
+                }
+            }, (error) => {
+                console.error("Error with snapshot listener:", error);
+                orderListEl.innerHTML = `<p class="text-red-500">Error loading orders. Please refresh.</p>`;
+            });
+        }
+        
+        // --- UI Rendering Helper ---
+        function createOrderCard(name, order) {
+            const card = document.createElement('div');
+            card.className = 'order-card animate-fade-in';
+            
+            const nameEl = document.createElement('h4');
+            nameEl.className = 'card-name';
+            nameEl.textContent = name;
+            
+            const orderEl = document.createElement('p');
+            orderEl.className = 'card-order';
+            orderEl.textContent = order;
+            
+            card.appendChild(nameEl);
+            card.appendChild(orderEl);
+            
+            return card;
+        }
+
+        // Add a simple fade-in animation for new cards
+        const styleSheet = document.createElement("style");
+        styleSheet.type = "text/css";
+        styleSheet.innerText = `
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-fade-in {
+                animation: fadeIn 0.3s ease-out;
+            }
+        `;
+        document.head.appendChild(styleSheet);
+
+
+        // --- Start the App ---
+        window.onload = () => {
+            showView('loading');
+            initializeFirebase();
+        };
+
+    </script>
+</body>
+</html>
