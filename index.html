@@ -201,24 +201,25 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         /* ------------------------------------------------------------------ */
-        /* START: PASTE YOUR FIREBASE CONFIG HERE                             */
-        /* */
-        /* 1. Go to your Firebase project settings.                           */
-        /* 2. Find your "Web app" configuration.                              */
-        /* 3. Copy the 'firebaseConfig' object and paste it below.            */
-        /* (See the Firebase_Setup_Guide.md file for help)                 */
+        /* START: FIREBASE CONFIG                                             */
+        /* You have successfully pasted your config object.                   */
         /* ------------------------------------------------------------------ */
 
-       // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyAwaTuBVE890A1dlvy7ePmgfj3HECQN4X8",
-  authDomain: "coffee-run-group-order.firebaseapp.com",
-  projectId: "coffee-run-group-order",
-  storageBucket: "coffee-run-group-order.firebasestorage.app",
-  messagingSenderId: "663181343663",
-  appId: "1:663181343663:web:1821a55952f1495e8ccd5a",
-  measurementId: "G-5BJ8Z7E1JJ"
-};
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+          apiKey: "AIzaSyAwaTuBVE890A1dlvy7ePmgfj3HECQN4X8",
+          authDomain: "coffee-run-group-order.firebaseapp.com",
+          projectId: "coffee-run-group-order",
+          storageBucket: "coffee-run-group-order.firebasestorage.app",
+          messagingSenderId: "663181343663",
+          appId: "1:663181343663:web:1821a55952f1495e8ccd5a",
+          measurementId: "G-5BJ8Z7E1JJ"
+        };
+
+        /* ------------------------------------------------------------------ */
+        /* END: FIREBASE CONFIG                                               */
+        /* ------------------------------------------------------------------ */
+
 
         // --- Global Variables ---
         let db, auth, app, userId, isAuthReady = false;
@@ -259,16 +260,7 @@ const firebaseConfig = {
         // --- Firebase Initialization ---
         async function initializeFirebase() {
             try {
-                // Check if the config has been updated
-                if (firebaseConfig.apiKey === "PASTE_YOUR_API_KEY_HERE") {
-                    console.error("Firebase config is not updated. Please paste your config object from Firebase.");
-                    loadingView.innerHTML = `
-                        <p class="text-red-600 font-semibold">Configuration Error!</p>
-                        <p class="text-gray-700 mt-2">Please paste your \`firebaseConfig\` object into \`coffee_run.html\` to connect to the database.</p>
-                        <p class="text-gray-500 text-sm mt-4">(See the \`Firebase_Setup_Guide.md\` file for help)</p>
-                    `;
-                    return;
-                }
+                // Config is now pasted in, no need for placeholder check.
                 
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
