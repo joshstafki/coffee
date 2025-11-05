@@ -49,7 +49,11 @@
         #summary-modal {
             display: none;
         }
+        
         /* Modal styles */
+        .modal-overlay {
+            @apply fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300;
+        }
         .modal-content {
             @apply bg-white p-6 rounded-lg shadow-xl w-full max-w-lg relative;
         }
@@ -184,7 +188,6 @@
         import { 
             getAuth, 
             signInAnonymously, 
-            signInWithCustomToken, 
             onAuthStateChanged 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
@@ -197,13 +200,33 @@
             setLogLevel
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        /* ------------------------------------------------------------------ */
+        /* START: PASTE YOUR FIREBASE CONFIG HERE                             */
+        /* */
+        /* 1. Go to your Firebase project settings.                           */
+        /* 2. Find your "Web app" configuration.                              */
+        /* 3. Copy the 'firebaseConfig' object and paste it below.            */
+        /* (See the Firebase_Setup_Guide.md file for help)                 */
+        /* ------------------------------------------------------------------ */
+
+       // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAwaTuBVE890A1dlvy7ePmgfj3HECQN4X8",
+  authDomain: "coffee-run-group-order.firebaseapp.com",
+  projectId: "coffee-run-group-order",
+  storageBucket: "coffee-run-group-order.firebasestorage.app",
+  messagingSenderId: "663181343663",
+  appId: "1:663181343663:web:1821a55952f1495e8ccd5a",
+  measurementId: "G-5BJ8Z7E1JJ"
+};
+
         // --- Global Variables ---
         let db, auth, app, userId, isAuthReady = false;
         let currentRoomId = null;
         let unsubscribeFromOrders = null; // To store the onSnapshot listener
 
-        // Get App ID from environment or use a default
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-coffee-app';
+        // This ID MUST match the one in your firestore.rules file
+        const appId = 'default-coffee-app';
         
         // --- DOM Elements ---
         const loadingView = document.getElementById('loading-view');
@@ -236,8 +259,16 @@
         // --- Firebase Initialization ---
         async function initializeFirebase() {
             try {
-                // Parse Firebase config from environment
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                // Check if the config has been updated
+                if (firebaseConfig.apiKey === "PASTE_YOUR_API_KEY_HERE") {
+                    console.error("Firebase config is not updated. Please paste your config object from Firebase.");
+                    loadingView.innerHTML = `
+                        <p class="text-red-600 font-semibold">Configuration Error!</p>
+                        <p class="text-gray-700 mt-2">Please paste your \`firebaseConfig\` object into \`coffee_run.html\` to connect to the database.</p>
+                        <p class="text-gray-500 text-sm mt-4">(See the \`Firebase_Setup_Guide.md\` file for help)</p>
+                    `;
+                    return;
+                }
                 
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -268,13 +299,9 @@
 
         async function attemptSignIn() {
             try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    console.log("Signing in with custom token...");
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                    console.log("Signing in anonymously...");
-                    await signInAnonymously(auth);
-                }
+                // On GitHub Pages, we'll only ever sign in anonymously
+                console.log("Signing in anonymously...");
+                await signInAnonymously(auth);
             } catch (error) {
                 console.error("Authentication error:", error);
                 loadingView.innerHTML = "Authentication failed. Please refresh.";
@@ -298,9 +325,8 @@
                 console.log(`Joined room: ${currentRoomId}`);
                 
                 // Update the share link input
-                // We construct the shareable URL from the href, stripping the 'blob:' prefix
-                // and any existing query params, then adding our room param.
-                const baseUrl = window.location.href.replace('blob:', '').split('?')[0];
+                // This will be the correct URL (e.g., https://user.github.io/repo/coffee_run.html?room=... )
+                const baseUrl = window.location.href.split('?')[0];
                 shareLinkInput.value = `${baseUrl}?room=${roomIdFromUrl}`;
                 
                 // Show the guest form AND the order list
@@ -355,11 +381,19 @@
             currentRoomId = newRoomId;
             
             // Update the share link input
-            // We construct the shareable URL from the href, stripping the 'blob:' prefix
-            // and any existing query params, then adding our new room param.
-            const baseUrl = window.location.href.replace('blob:', '').split('?')[0];
-            shareLinkInput.value = `${baseUrl}?room=${newRoomId}`;
+            // This will be the correct URL (e.g., https://user.github.io/repo/coffee_run.html?room=... )
+            const baseUrl = window.location.href.split('?')[0];
+            const shareUrl = `${baseUrl}?room=${newRoomId}`;
+            shareLinkInput.value = shareUrl;
             
+            // This will also update the browser's URL bar without reloading
+            // This is helpful if the host refreshes their page
+            try {
+                window.history.pushState({ path: shareUrl }, '', shareUrl);
+            } catch (e) {
+                console.warn("Could not push state to history (this is OK):", e);
+            }
+
             // Hide host view, show list container (which has the link)
             showView('list-container');
             // Also show the guest form so the host can add their own order
@@ -390,6 +424,7 @@
             submitOrderBtn.innerHTML = "Submitting...";
 
             try {
+                // Use the 'appId' variable defined globally
                 const roomCollectionPath = `/artifacts/${appId}/public/data/coffee-rooms/${currentRoomId}/orders`;
                 await addDoc(collection(db, roomCollectionPath), {
                     name: name,
@@ -400,7 +435,7 @@
                 // Show success message
                 showView('success');
                 // Keep the list container visible
-                showView('list-container');
+                listContainerView.style.display = 'block';
 
             } catch (error) {
                 console.error("Error adding document: ", error);
@@ -510,7 +545,7 @@
 
         // --- Gemini API Call Function ---
         async function callGemini(userQuery, systemPrompt) {
-            const apiKey = ""; // API key is handled by the environment
+            const apiKey = ""; // API key is handled by the environment (or Firebase Functions in a real app)
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -577,6 +612,7 @@
                 unsubscribeFromOrders();
             }
 
+            // Use the 'appId' variable defined globally
             const roomCollectionPath = `/artifacts/${appId}/public/data/coffee-rooms/${roomId}/orders`;
             const q = query(collection(db, roomCollectionPath));
 
